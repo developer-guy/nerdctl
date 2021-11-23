@@ -17,10 +17,13 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"os/exec"
 
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/images/converter"
@@ -60,6 +63,11 @@ func newPushCommand() *cobra.Command {
 
 	pushCommand.Flags().Bool("estargz", false, "Convert the image into eStargz")
 	pushCommand.Flags().Bool("ipfs-ensure-image", true, "Ensure the entire contents of the image is locally available before push")
+
+	pushCommand.Flags().String("sign", "none", "Sign the image with none|cosign. Default none")
+
+	pushCommand.Flags().String("cosign-key", "",
+		"path to the private key file, KMS URI or Kubernetes Secret")
 
 	return pushCommand
 }
@@ -187,6 +195,47 @@ func pushAction(cmd *cobra.Command, args []string) error {
 			return err
 		}
 	}
+
+	if isSign, err := cmd.Flags().GetString("sign"); err == nil && isSign == "cosign" {
+		cosignExecutable, err := exec.LookPath("cosign")
+		if err != nil {
+			logrus.WithError(err).Error("cosign executable not found in path $PATH")
+			logrus.Info("you might consider installing cosign from: https://docs.sigstore.dev/cosign/installation")
+			return err
+		}
+
+		cosignCmd := exec.Command(cosignExecutable, []string{"sign"}...)
+		cosignCmd.Env = os.Environ()
+
+		keyRef, err := cmd.Flags().GetString("cosign-key")
+		if err != nil {
+			return err
+		}
+
+		if keyRef != "" {
+			cosignCmd.Args = append(cosignCmd.Args, "--key", keyRef)
+		} else {
+			cosignCmd.Env = append(cosignCmd.Env, "COSIGN_EXPERIMENTAL=true")
+		}
+
+		cosignCmd.Args = append(cosignCmd.Args, rawRef)
+
+		logrus.Debugf("running %s %v", cosignExecutable, cosignCmd.Args)
+
+		stdout, _ := cosignCmd.StdoutPipe()
+		if err := cosignCmd.Start(); err != nil {
+			return err
+		}
+
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			logrus.Info("cosign: " + scanner.Text())
+		}
+		if err := cosignCmd.Wait(); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

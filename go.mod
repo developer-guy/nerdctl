@@ -25,6 +25,7 @@ require (
 	github.com/docker/go-units v0.4.0
 	github.com/fatih/color v1.13.0
 	github.com/gogo/protobuf v1.3.2
+	github.com/google/go-containerregistry v0.6.1-0.20210922191434-34b7f00d7a60
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/ipfs/go-cid v0.1.0
 	github.com/ipfs/go-ipfs-files v0.0.9
@@ -38,6 +39,7 @@ require (
 	github.com/opencontainers/image-spec v1.0.2-0.20211102003311-9a7a9876500e
 	github.com/opencontainers/runtime-spec v1.0.3-0.20211101234015-a3c33d663ebc
 	github.com/rootless-containers/rootlesskit v0.14.6
+	github.com/sigstore/cosign v1.3.1
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/cobra v1.2.1
 	github.com/spf13/pflag v1.0.5

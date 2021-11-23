@@ -17,8 +17,11 @@
 package main
 
 import (
+	"bufio"
 	"errors"
+	"github.com/sirupsen/logrus"
 	"os"
+	"os/exec"
 
 	"github.com/containerd/nerdctl/pkg/imgutil"
 	"github.com/containerd/nerdctl/pkg/ipfs"
@@ -39,6 +42,9 @@ func newPullCommand() *cobra.Command {
 		SilenceErrors: true,
 	}
 	pullCommand.Flags().String("unpack", "auto", "Unpack the image for the current single platform (auto/true/false)")
+	pullCommand.Flags().String("cosign-key", "",
+		"path to the private key file, KMS URI or Kubernetes Secret")
+
 	pullCommand.RegisterFlagCompletionFunc("unpack", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{"auto", "true", "false"}, cobra.ShellCompDirectiveNoFileComp
 	})
@@ -48,6 +54,7 @@ func newPullCommand() *cobra.Command {
 	pullCommand.Flags().StringSlice("platform", nil, "Pull content for a specific platform")
 	pullCommand.RegisterFlagCompletionFunc("platform", shellCompletePlatforms)
 	pullCommand.Flags().Bool("all-platforms", false, "Pull content for all platforms")
+	pullCommand.Flags().String("verify", "none", "Verify the image with none|cosign. Default none")
 	// #endregion
 
 	return pullCommand
@@ -57,6 +64,7 @@ func pullAction(cmd *cobra.Command, args []string) error {
 	if len(args) < 1 {
 		return errors.New("image name needs to be specified")
 	}
+	rawRef := args[0]
 	client, ctx, cancel, err := newClient(cmd)
 	if err != nil {
 		return err
@@ -90,6 +98,54 @@ func pullAction(cmd *cobra.Command, args []string) error {
 	unpack, err := strutil.ParseBoolOrAuto(unpackStr)
 	if err != nil {
 		return err
+	}
+
+	if isVerify, err := cmd.Flags().GetString("verify"); err == nil && isVerify == "cosign" {
+		digest, err := imgutil.ResolveDigest(ctx, rawRef, false)
+		rawRef = rawRef + "@" + digest
+		if err != nil {
+			logrus.Errorf("Unable to resolve digest for an image %s: %v\n", rawRef, err)
+		}
+
+		logrus.Debugf("verifying image: %s\n", rawRef)
+
+		cosignExecutable, err := exec.LookPath("cosign")
+		if err != nil {
+			logrus.WithError(err).Error("cosign executable not found in path $PATH")
+			logrus.Info("you might consider installing cosign from: https://docs.sigstore.dev/cosign/installation")
+			return err
+		}
+
+		cosignCmd := exec.Command(cosignExecutable, []string{"verify"}...)
+		cosignCmd.Env = os.Environ()
+
+		keyRef, err := cmd.Flags().GetString("cosign-key")
+		if err != nil {
+			return err
+		}
+
+		if keyRef != "" {
+			cosignCmd.Args = append(cosignCmd.Args, "--key", keyRef)
+		} else {
+			cosignCmd.Env = append(cosignCmd.Env, "COSIGN_EXPERIMENTAL=true")
+		}
+
+		cosignCmd.Args = append(cosignCmd.Args, rawRef)
+
+		logrus.Debugf("running %s %v", cosignExecutable, cosignCmd.Args)
+
+		stdout, _ := cosignCmd.StdoutPipe()
+		if err := cosignCmd.Start(); err != nil {
+			return err
+		}
+
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			logrus.Info("cosign: " + scanner.Text())
+		}
+		if err := cosignCmd.Wait(); err != nil {
+			return err
+		}
 	}
 
 	if scheme, ref, err := referenceutil.ParseIPFSRefWithScheme(args[0]); err == nil {
