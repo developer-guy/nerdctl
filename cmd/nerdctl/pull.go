@@ -42,6 +42,9 @@ func newPullCommand() *cobra.Command {
 		SilenceErrors: true,
 	}
 	pullCommand.Flags().String("unpack", "auto", "Unpack the image for the current single platform (auto/true/false)")
+	pullCommand.Flags().String("cosign-key", "",
+		"path to the private key file, KMS URI or Kubernetes Secret")
+
 	pullCommand.RegisterFlagCompletionFunc("unpack", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{"auto", "true", "false"}, cobra.ShellCompDirectiveNoFileComp
 	})
