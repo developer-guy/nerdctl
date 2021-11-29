@@ -64,7 +64,7 @@ func newPushCommand() *cobra.Command {
 	pushCommand.Flags().Bool("estargz", false, "Convert the image into eStargz")
 	pushCommand.Flags().Bool("ipfs-ensure-image", true, "Ensure the entire contents of the image is locally available before push")
 
-	pushCommand.Flags().Bool("sign", false, "Allow signing images right after built them")
+	pushCommand.Flags().Bool("sign", false, "Sign the image with cosign")
 
 	pushCommand.Flags().String("cosign-key", "",
 		"path to the private key file, KMS URI or Kubernetes Secret")
@@ -195,12 +195,6 @@ func pushAction(cmd *cobra.Command, args []string) error {
 			return err
 		}
 	}
-
-	// nerdctl push --sign --cosign-key cosign.key devopps/hello-world-cli:latest
-
-	// nerdctl push
-	// cosign sign --key cosign.key devopps/hello-world-cli:latest
-	// COSIGN_EXPERIMENTAL=1 cosign sign devopps/hello-world-cli:latest
 
 	if isSign, err := cmd.Flags().GetBool("sign"); err == nil && isSign {
 		cosignExecutable, err := exec.LookPath("cosign")
