@@ -36,6 +36,8 @@ ARG FUSE_OVERLAYFS_VERSION=v1.8
 ARG CONTAINERD_FUSE_OVERLAYFS_VERSION=v1.0.4
 # Extra deps: IPFS
 ARG IPFS_VERSION=v0.11.0
+# Extra deps: Cosign
+ARG COSIGN_VERSION=v1.4.1
 
 # Test deps
 ARG GO_VERSION=1.17
@@ -183,7 +185,15 @@ RUN fname="go-ipfs_${IPFS_VERSION}_${TARGETOS:-linux}-${TARGETARCH:-amd64}.tar.g
   tmpout=$(mktemp -d) && \
   tar -C ${tmpout} -xzf "${fname}" go-ipfs/ipfs && \
   mv ${tmpout}/go-ipfs/ipfs /out/bin/ && \
-  echo "- IPFS: ${IPFS_VERSION}" >> /out/share/doc/nerdctl-full/README.md
+  echo "- IPFS: ${IPFS_VERSION}" >> /out/share/doc/nerdctl-full/README.md \
+ARG COSIGN_VERSION
+RUN fname="cosign-${TARGETOS:-linux}-${TARGETARCH:-amd64}" && \
+  curl -o "${fname}" -fSL "https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/${fname}" && \
+  grep "${fname}" "/SHA256SUMS.d/cosign-${COSIGN_VERSION}" | sha256sum -c && \
+  chmod +x $fname && \
+  mv $fname cosign && \
+  mv cosign /out/bin/ && \
+  echo "- cosign: ${COSIGN_VERSION}" >> /out/share/doc/nerdctl-full/README.md \
 
 RUN echo "" >> /out/share/doc/nerdctl-full/README.md && \
   echo "## License" >> /out/share/doc/nerdctl-full/README.md && \
